@@ -20,8 +20,10 @@
 set -o errexit
 set -o nounset
 cleanup() {
+   printf "==================================================\n"
    echo "Clean up temporary files..."
    echo "... Done!"
+   printf "==================================================\n"
 }
 trap cleanup EXIT
 
@@ -31,3 +33,67 @@ trap cleanup EXIT
 __dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 __file="${__dir}/$(basename "${BASH_SOURCE[0]}")"
 __base="$(basename ${__file} .sh)"
+
+
+
+
+
+
+
+
+### ====================================================================================================
+### Function:  Documentation of the script
+###            How to use it
+show_usage()
+{
+   printf "\n================   Script usage   ================\n"
+   printf "./${__base}.sh --train [name] --number [nb]\n"
+   printf "   --train:  D2H_pp\n"
+   printf "   --number: 2589\n"
+   printf "==================================================\n"
+   printf "\n"
+   exit 1
+}
+
+
+
+
+
+
+### ====================================================================================================
+### Function:  check pre-requists
+###            Script arguments, AliRoot, AliEn
+check_prerequists()
+{
+   printf "\n"
+   echo "--- Starting the script"
+   echo "o-- Check pre-requists"
+
+   if [[ ${#} -eq 0 ]]
+   then
+      echo "WARNING: The script expects arguments!"
+      show_usage
+   fi
+
+   if [[ -z ${ALICE_PHYSICS} ]]
+   then
+      echo "WARNING: AliRoot should be loaded to merge outputs"
+      show_usage
+   fi
+
+   if grep --quiet "No Token found!" <<< "$(alien-token-info)"
+   then
+      echo "WARNING: An access to AliEn is required. Please get a token: alien-token-init username"
+      show_usage
+   fi
+}
+
+
+
+
+
+
+### ====================================================================================================
+### Main:  default use of the script
+###        Check, parse
+check_prerequists "$@"

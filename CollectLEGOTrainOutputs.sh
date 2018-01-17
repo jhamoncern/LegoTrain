@@ -16,6 +16,8 @@
 ###    Julien Hamon (IPHC, Strasbourg)
 ###
 
+develop=true
+
 
 set -o errexit
 set -o nounset
@@ -75,17 +77,95 @@ check_prerequists()
       show_usage
    fi
 
-   # if [[ -z ${ALICE_PHYSICS} ]]
-   # then
-   #    echo "WARNING: AliRoot should be loaded to merge outputs"
-   #    show_usage
-   # fi
+   [[ ${develop:-} = true ]] && return
 
-   # if grep --quiet "No Token found!" <<< "$(alien-token-info)"
-   # then
-   #    echo "WARNING: An access to AliEn is required. Please get a token: alien-token-init username"
-   #    show_usage
-   # fi
+   if [[ -z ${ALICE_PHYSICS} ]]
+   then
+      echo "WARNING: AliRoot should be loaded to merge outputs"
+      show_usage
+   fi
+
+   if grep --quiet "No Token found!" <<< "$(alien-token-info)"
+   then
+      echo "WARNING: An access to AliEn is required. Please get a token: alien-token-init username"
+      show_usage
+   fi
+}
+
+
+
+
+
+
+### ====================================================================================================
+### Function:  format train name
+###            PAG_System or PAG_System_MC
+format_train_name()
+{
+   __trainName="${1}"
+
+
+   # Find PAG name of the train
+   local __list_PAG=("CF" "DQ" "GA" "D2H" "Electrons" "HFCJ" "HM" "Jets" "LF")
+
+   local __trainPAG=
+   for ipag in ${__list_PAG[@]} ; do
+      [[ "${ipag}_" =~ $(grep -o -E "^[a-zA-Z2]{1,9}_" <<< ${__trainName}) ]] && __trainPAG="${ipag}" && break
+   done
+
+   if [[ -z ${__trainPAG:-} ]]
+   then
+      printf "WARNING: the train name (${__trainName}) does not match any available PAG:"
+      printf " $(for ipag in ${__list_PAG[@]} ; do printf "${ipag} " ; done)\n"
+      show_usage
+   fi
+
+
+   # Find PWG name of the train
+   local __trainPWG=
+   case "${__trainPAG}" in
+      "CF")
+         __trainPWG="PWGCF"
+         ;;
+      "DQ")
+         __trainPWG="PWGDQ"
+         ;;
+      "GA")
+         __trainPWG="PWGGA"
+         ;;
+      "D2H" | "Electrons" | "HFCJ")
+         __trainPWG="PWGHF"
+         ;;
+      "HM")
+         __trainPWG="PWGHM"
+         ;;
+      "LF")
+         __trainPWG="PWGLF"
+         ;;
+      *)
+         echo "WARNING: the train PAG (${__trainPAG}) does not match any PWG"
+         show_usage
+         ;;
+   esac
+
+
+   # Find the collision system
+   local __list_ColSyst=("pp" "pPb" "PbPb")
+
+   for icol in ${__list_ColSyst[@]} ; do
+      [[ "_${icol}" =~ $(grep -o -E "_[pPb]{2,4}" <<< ${__trainName}) ]] && __trainColSyst="${icol}" && break
+   done
+
+   if [[ -z ${__trainColSyst:-} ]]
+   then
+      printf "WARNING: the train name (${__trainName}) does not match any available collision system:"
+      printf " $(for icol in ${__list_ColSyst[@]} ; do printf "${icol} " ; done)\n"
+      show_usage
+   fi
+
+
+   # Add underscore to "MC" trains, if missing: e.g. ppMC -> pp_MC
+   grep --quiet -E '[a-zA-Z]{2,4}MC$' <<< ${__trainName} && __trainName=$(sed -e 's/MC/_MC/' <<< ${__trainName})
 }
 
 
@@ -113,21 +193,33 @@ parse_arguments()
             show_usage
             ;;
 
+         # Get the LEGO train name
+         --train)
+            if [[ -n ${2:-} ]] && grep --quiet -E '^[0-9a-zA-Z_]{1,}$' <<< ${2}
+            then
+               format_train_name "${2}"
+               shift
+            else
+               echo "WARNING: --train expects a value"
+               show_usage
+            fi
+            ;;
+
          # Get the LEGO train number
          --number)
             if [[ -n ${2:-} ]] && grep --quiet -E '^[0-9]{1,4}$' <<< ${2}
             then
-               # Do something...
+               __trainNumber=${2}
                shift
             else
-               echo "WARNING: --number expects a value" >&2
+               echo "WARNING: --number expects a value"
                show_usage
             fi
             ;;
 
          # In case of unknown options
          -?*)
-            printf 'WARNING: Unknown option %s\n' "${1}" >&2
+            echo "WARNING: Unknown option ${1}"
             show_usage
             ;;
 
@@ -142,6 +234,16 @@ parse_arguments()
       shift
 
    done
+
+
+   # Check that all the required arguments are provided
+   [[ -z ${__trainName:-} ]]   && echo "WARNING: you should provide the train name"   && show_usage
+   [[ -z ${__trainNumber:-} ]] && echo "WARNING: you should provide the train number" && show_usage
+
+
+   # Print out the list of arguments
+   echo "   -> Train name:   ${__trainName}"
+   echo "   -> Train number: ${__trainNumber}"
 }
 
 

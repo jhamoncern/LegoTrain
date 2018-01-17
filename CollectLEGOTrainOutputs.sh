@@ -75,18 +75,76 @@ check_prerequists()
       show_usage
    fi
 
-   if [[ -z ${ALICE_PHYSICS} ]]
-   then
-      echo "WARNING: AliRoot should be loaded to merge outputs"
-      show_usage
-   fi
+   # if [[ -z ${ALICE_PHYSICS} ]]
+   # then
+   #    echo "WARNING: AliRoot should be loaded to merge outputs"
+   #    show_usage
+   # fi
 
-   if grep --quiet "No Token found!" <<< "$(alien-token-info)"
-   then
-      echo "WARNING: An access to AliEn is required. Please get a token: alien-token-init username"
-      show_usage
-   fi
+   # if grep --quiet "No Token found!" <<< "$(alien-token-info)"
+   # then
+   #    echo "WARNING: An access to AliEn is required. Please get a token: alien-token-init username"
+   #    show_usage
+   # fi
 }
+
+
+
+
+
+
+### ====================================================================================================
+### Function:  manually parsing options in a flexible approach
+###            Source: http://mywiki.wooledge.org/BashFAQ/035#Manual_loop
+parse_arguments()
+{
+   echo "oo- Parse script arguments"
+
+
+   while :; do
+
+      # Break out the loop if there are no more options
+      [[ -n ${1:-} ]] || break
+
+      case ${1} in
+
+         # Documentation
+         --help | -h | -\?)
+            show_usage
+            ;;
+
+         # Get the LEGO train number
+         --number)
+            if [[ -n ${2:-} ]] && grep --quiet -E '^[0-9]{1,4}$' <<< ${2}
+            then
+               # Do something...
+               shift
+            else
+               echo "WARNING: --number expects a value" >&2
+               show_usage
+            fi
+            ;;
+
+         # In case of unknown options
+         -?*)
+            printf 'WARNING: Unknown option %s\n' "${1}" >&2
+            show_usage
+            ;;
+
+         # Default case: break out the loop if there are no more options
+         *)
+            break
+            ;;
+
+      esac
+
+      # Shift the script argument to the left
+      shift
+
+   done
+}
+
+
 
 
 
@@ -97,3 +155,4 @@ check_prerequists()
 ### Main:  default use of the script
 ###        Check, parse
 check_prerequists "$@"
+parse_arguments "$@"

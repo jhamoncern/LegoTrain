@@ -267,13 +267,72 @@ parse_arguments()
 
 
 ### ====================================================================================================
-### Function:  Collect train outputs
+### Function:  Collect train outputs within a directory
+###            If merging failed, then files in Stage_<max>/0*/ are merged
+collect_outputs_inDirectory()
+{
+   # Check if a train directory is provided
+   local __alien_trainDirectory="${1:-}"
+
+   if [[ -z ${__alien_trainDirectory:-} ]]
+   then
+      echo "WARNING: no directory provided to collect_outputs_inDirectory()"
+      return 0
+   fi
+
+
+   # Check if the output suffix is provided
+   local output_suffix="${2:-}"
+   if [[ -z ${output_suffix:-} ]]
+   then
+      echo "WARNING: no output suffix provided to collect_outputs_inDirectory()"
+      return 0
+   fi
+
+
+   # Merging successful
+   if alien_ls ${__alien_trainDirectory}/AnalysisResults.root &> /dev/null
+   then
+      alien_cp alien:${__alien_trainDirectory}/AnalysisResults.root file:AnalysisResults_${output_suffix}.root
+      return 1
+   fi
+
+
+   # Merging failed
+   local nMergingStage=($(alien_ls -F ${__alien_trainDirectory}/ | grep -E -c "^Stage_[0-9]/$"))
+   __alien_trainDirectory="${__alien_trainDirectory}Stage_${nMergingStage}/"
+
+
+   alien_ls -F ${__alien_trainDirectory} | while read -r ; do
+
+      local finput="${__alien_trainDirectory}/${REPLY}/AnalysisResults.root"
+      ! alien_ls ${finput} &> /dev/null && continue
+      # alien_cp alien:${__alien_trainDirectory}/${REPLY}/AnalysisResults.root file:AnalysisResults_{output_suffix}.root
+
+   done
+
+
+   return 0
+}
+
+
+
+
+
+
+### ====================================================================================================
+### Function:  Collect train outputs - main method
 ###            1. Assuming the train manages to reach the "merging" stage: a. normal train, b. meta train.
 ###
 ### Note: alien_<cmd> outputs are redirected to the trash (&> /dev/null) to silent them
-collect_outputs()
+collect_outputs_main()
 {
    echo "ooo Collect train outputs"
+
+
+   # Build suffix for outputs
+   local output_suffix="$(sed 's/_//g' <<< ${__trainName})"
+   output_suffix="${output_suffix}_${__trainNumber}"
 
 
    # Path of the train mother directory on AliEn
@@ -307,8 +366,8 @@ collect_outputs()
    then
       # Only one runlist
       # Do something
-      echo "INFO: This train has a single runlist"
-      echo "${__alien_trainPath}/merge/"
+      echo "INFO: This train has a single runlist: ${__alien_trainPath}/merge/"
+      collect_outputs_inDirectory "${__alien_trainPath}/merge/" "${output_suffix}"
    fi
 
 
@@ -321,11 +380,11 @@ collect_outputs()
    fi
 
 
-   for irun in ${__alien_trainRunlist} ; do
+   for irun in ${!__alien_trainRunlist[@]} ; do
       # Several runlists
       # Do something
-      echo "INFO: This train have several runlists"
-      echo "${__alien_trainPath}${irun}"
+      echo "INFO: This train have several runlists: ${__alien_trainPath}${__alien_trainRunlist[${irun}]}"
+      collect_outputs_inDirectory "${__alien_trainPath}${__alien_trainRunlist[${irun}]}" "${output_suffix}_runlist${irun}"
    done
 
 }
@@ -343,4 +402,4 @@ collect_outputs()
 ###        Check, parse
 check_prerequists "$@"
 parse_arguments "$@"
-collect_outputs
+collect_outputs_main

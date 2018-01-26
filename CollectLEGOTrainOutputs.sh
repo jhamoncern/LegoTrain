@@ -8,20 +8,27 @@
 ###     b. merging is performed at "processing" level
 ###     c. merging is performed on a per-run basis
 ###
-### Constraint:
+### Constraints:
 ###   - Bash scripting written in a portable way (if possible)
 ###   - Making use of AliEn/AliRoot environment
+###
+### Notes:
+###   - alien_<cmd> outputs are redirected to the trash (&> /dev/null) to silent them
+###   - alien_ls -F : list directories with a trailing '/'
 ###
 ### Author:
 ###    Julien Hamon (IPHC, Strasbourg)
 ###
 
-develop=false
+develop=true
 ###
 ### Example of train with 2 runlists:
 ###   - Runlit 1: failed during merging
 ###   - Runlit 2: merging successful
 ### --train D2H_pp_MC --number 840
+###
+### Example of META train with 7 children:
+### --train D2H_pp --number 2077
 ###
 
 
@@ -83,9 +90,7 @@ check_prerequists()
       show_usage
    fi
 
-   [[ ${develop:-} = true ]] && return
-
-   if [[ -z ${ALICE_PHYSICS} ]]
+   if [[ -z ${ALICE_PHYSICS:-} ]]
    then
       echo "WARNING: AliRoot should be loaded to merge outputs"
       show_usage
@@ -303,13 +308,25 @@ collect_outputs_inDirectory()
    __alien_trainDirectory="${__alien_trainDirectory}Stage_${nMergingStage}/"
 
 
+   local mergingCmd="alihadd -k AnalysisResults_${output_suffix}.root"
+
    alien_ls -F ${__alien_trainDirectory} | while read -r ; do
 
       local finput="${__alien_trainDirectory}/${REPLY}/AnalysisResults.root"
       ! alien_ls ${finput} &> /dev/null && continue
-      # alien_cp alien:${__alien_trainDirectory}/${REPLY}/AnalysisResults.root file:AnalysisResults_{output_suffix}.root
+      alien_cp alien:${__alien_trainDirectory}/${REPLY}/AnalysisResults.root file:AnalysisResults_${output_suffix}_tmp${REPLY}.root
+      mergingCmd="${mergingCmd} AnalysisResults_${output_suffix}_tmp${REPLY}.root"
 
    done
+
+   eval ${mergingCmd[@]}
+   if [[ -e AnalysisResults_${output_suffix}.root ]]
+   then
+      rm -f AnalysisResults_${output_suffix}_tmp*
+      return 1
+   else
+      return 0
+   fi
 
 
    return 0
@@ -324,15 +341,14 @@ collect_outputs_inDirectory()
 ### Function:  Collect train outputs - main method
 ###            1. Assuming the train manages to reach the "merging" stage: a. normal train, b. meta train.
 ###
-### Note: alien_<cmd> outputs are redirected to the trash (&> /dev/null) to silent them
 collect_outputs_main()
 {
    echo "ooo Collect train outputs"
 
 
    # Build suffix for outputs
-   local output_suffix="$(sed 's/_//g' <<< ${__trainName})"
-   output_suffix="${output_suffix}_${__trainNumber}"
+   local __trainOutput_suffix="$(sed 's/_//g' <<< ${__trainName})"
+   __trainOutput_suffix="${__trainOutput_suffix}_${__trainNumber}"
 
 
    # Path of the train mother directory on AliEn
@@ -340,51 +356,70 @@ collect_outputs_main()
 
    if ! alien_ls ${__alien_trainPath} &> /dev/null
    then
-      echo "WARNING: the train mother directory is not found on AliEn: ${__alien_trainPath}"
+      echo "WARNING: the train mother directory has not been found on AliEn: ${__alien_trainPath}"
       show_usage
    fi
 
 
-   # Find specific directory of the train (trainNumber_date-time)
-   local __alien_trainID=$(alien_ls ${__alien_trainPath} | grep -E -o "^${__trainNumber}_[0-9]{8}-[0-9]{4}$")
+   # Find the specific directory of the train
+   #   a. META train:     trainNumber_date-time (merged children) + trainNumber_date-time_child_x (one per children)
+   #   b. Standard train: trainNumber_date-time
+
+   local __alien_trainID=$(alien_ls ${__alien_trainPath} | grep -E -o "^${__trainNumber}_[0-9]{8}-[0-9]{4}[_,child,0-9]{0,8}$")
 
    if [[ -z ${__alien_trainID:-} ]]
    then
-      echo "WARNING: cannot find the specific directory of the train ${__trainNumber}_date-time"
-      show_usage
-      ### NOTE: it could be a META train: trainNumber_date-time_child*
-      ### -> to be implemented
-   fi
-
-
-   # Update the train mother directory
-   __alien_trainPath="${__alien_trainPath}${__alien_trainID}/"
-
-
-   # ls -F : list directories with a trailing '/'
-   if alien_ls -F ${__alien_trainPath} | grep --quiet -E -o "^merge/$"
-   then
-      # Only one runlist
-      # Do something
-      echo "INFO: This train has a single runlist: ${__alien_trainPath}/merge/"
-      collect_outputs_inDirectory "${__alien_trainPath}/merge/" "${output_suffix}"
-   fi
-
-
-   local __alien_trainRunlist=$(alien_ls -F ${__alien_trainPath} | grep -E "^merge_runlist_[1-9]{1,2}/$")
-
-   if [[ -z ${__alien_trainRunlist:-} ]]
-   then
-      # Cannot find several runlists
+      echo "WARNING: cannot find the specific directory of the train with format ${__trainNumber}_date-time*"
       show_usage
    fi
 
 
-   for irun in ${!__alien_trainRunlist[@]} ; do
-      # Several runlists
-      # Do something
-      echo "INFO: This train have several runlists: ${__alien_trainPath}${__alien_trainRunlist[${irun}]}"
-      collect_outputs_inDirectory "${__alien_trainPath}${__alien_trainRunlist[${irun}]}" "${output_suffix}_runlist${irun}"
+   local nTrainID=$(wc -w <<< ${__alien_trainID} | tr -d ' ')
+   if [[ ${nTrainID:-} = 1 ]]
+   then
+      echo "   -> The train ran on standard (non-META) dataset"
+   else
+      echo "   -> The train ran on META dataset containing $((${nTrainID}-1)) children"
+   fi
+
+
+   # Loop over the train mother directories (trainNumber_date-time + potential children)
+   for idir in ${__alien_trainID[@]} ; do
+
+      # Update the train mother directory
+      local trainDirPath="${__alien_trainPath}${idir}/"
+      local extraSuffix=$(grep -E -o "[_,child,0-9]{8}$" <<< ${idir})
+      local output_suffix="${__trainOutput_suffix}${extraSuffix}"
+
+
+      # Case where there is a SINGLE runlist
+      if alien_ls -F ${trainDirPath} | grep --quiet -E -o "^merge/$"
+      then
+         echo "   -> Directory ${idir} has a single runlist"
+         [[ ${develop} = false ]] && collect_outputs_inDirectory "${trainDirPath}/merge/" "${output_suffix}"
+         continue
+      fi
+
+
+      # Search for several runlists
+      local __alien_trainRunlist=($(alien_ls -F ${trainDirPath} | grep -E "^merge_runlist_[1-9]{1,2}/$"))
+
+      if [[ -z ${__alien_trainRunlist:-} ]]
+      then
+         echo "   -> WARNING: cannot find output files or directories in ${trainDirPath}"
+         continue
+      fi
+
+
+      # Case where there are SEVERAL runlist
+      echo "   -> Directory ${idir} has $(wc -w <<< ${__alien_trainRunlist[@]} | tr -d ' ') runlists"
+
+      for irun in ${!__alien_trainRunlist[@]} ; do
+         local iRunlist=$((${irun}+1))
+         [[ ${develop} = false ]] && collect_outputs_inDirectory "${trainDirPath}/merge_runlist_${iRunlist}/" "${output_suffix}_runlist${iRunlist}"
+      done
+
+
    done
 
 }

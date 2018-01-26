@@ -16,7 +16,13 @@
 ###    Julien Hamon (IPHC, Strasbourg)
 ###
 
-develop=true
+develop=false
+###
+### Example of train with 2 runlists:
+###   - Runlit 1: failed during merging
+###   - Runlit 2: merging successful
+### --train D2H_pp_MC --number 840
+###
 
 
 set -o errexit
@@ -122,7 +128,6 @@ format_train_name()
 
 
    # Find PWG name of the train
-   local __trainPWG=
    case "${__trainPAG}" in
       "CF")
          __trainPWG="PWGCF"
@@ -148,6 +153,13 @@ format_train_name()
          ;;
    esac
 
+   if [[ -z ${__trainPWG:-} ]]
+   then
+      printf "WARNING: the train name (${__trainName}) does not match any available PWG:"
+      printf " $(for ipwg in ${__list_PWG[@]} ; do printf "${ipwg} " ; done)\n"
+      show_usage
+   fi
+
 
    # Find the collision system
    local __list_ColSyst=("pp" "pPb" "PbPb")
@@ -165,7 +177,10 @@ format_train_name()
 
 
    # Add underscore to "MC" trains, if missing: e.g. ppMC -> pp_MC
-   grep --quiet -E '[a-zA-Z]{2,4}MC$' <<< ${__trainName} && __trainName=$(sed -e 's/MC/_MC/' <<< ${__trainName})
+   if grep --quiet -E '[a-zA-Z]{2,4}MC$' <<< ${__trainName}
+   then
+      __trainName=$(sed -e 's/MC/_MC/' <<< ${__trainName})
+   fi
 }
 
 
@@ -251,6 +266,76 @@ parse_arguments()
 
 
 
+### ====================================================================================================
+### Function:  Collect train outputs
+###            1. Assuming the train manages to reach the "merging" stage: a. normal train, b. meta train.
+###
+### Note: alien_<cmd> outputs are redirected to the trash (&> /dev/null) to silent them
+collect_outputs()
+{
+   echo "ooo Collect train outputs"
+
+
+   # Path of the train mother directory on AliEn
+   local __alien_trainPath="/alice/cern.ch/user/a/alitrain/${__trainPWG}/${__trainName}/"
+
+   if ! alien_ls ${__alien_trainPath} &> /dev/null
+   then
+      echo "WARNING: the train mother directory is not found on AliEn: ${__alien_trainPath}"
+      show_usage
+   fi
+
+
+   # Find specific directory of the train (trainNumber_date-time)
+   local __alien_trainID=$(alien_ls ${__alien_trainPath} | grep -E -o "^${__trainNumber}_[0-9]{8}-[0-9]{4}$")
+
+   if [[ -z ${__alien_trainID:-} ]]
+   then
+      echo "WARNING: cannot find the specific directory of the train ${__trainNumber}_date-time"
+      show_usage
+      ### NOTE: it could be a META train: trainNumber_date-time_child*
+      ### -> to be implemented
+   fi
+
+
+   # Update the train mother directory
+   __alien_trainPath="${__alien_trainPath}${__alien_trainID}/"
+
+
+   # ls -F : list directories with a trailing '/'
+   if alien_ls -F ${__alien_trainPath} | grep --quiet -E -o "^merge/$"
+   then
+      # Only one runlist
+      # Do something
+      echo "INFO: This train has a single runlist"
+      echo "${__alien_trainPath}/merge/"
+   fi
+
+
+   local __alien_trainRunlist=$(alien_ls -F ${__alien_trainPath} | grep -E "^merge_runlist_[1-9]{1,2}/$")
+
+   if [[ -z ${__alien_trainRunlist:-} ]]
+   then
+      # Cannot find several runlists
+      show_usage
+   fi
+
+
+   for irun in ${__alien_trainRunlist} ; do
+      # Several runlists
+      # Do something
+      echo "INFO: This train have several runlists"
+      echo "${__alien_trainPath}${irun}"
+   done
+
+}
+
+
+
+
+
+
+
 
 
 ### ====================================================================================================
@@ -258,3 +343,4 @@ parse_arguments()
 ###        Check, parse
 check_prerequists "$@"
 parse_arguments "$@"
+collect_outputs

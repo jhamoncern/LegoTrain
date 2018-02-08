@@ -334,24 +334,35 @@ collect_outputs_inDirectory()
    local nMergingStage=($(alien_ls -F ${__alien_trainDirectory}/ | grep -E -c "^Stage_[0-9]/$"))
    __alien_trainDirectory="${__alien_trainDirectory}Stage_${nMergingStage}/"
 
+   echo "   -> The final merging has failed at Stage_${nMergingStage}. Merge files from this stage locally..."
 
-   local mergingCmd="alihadd -k AnalysisResults_${output_suffix}.root"
+   mergingCmd="alihadd -k AnalysisResults_${output_suffix}.root"
 
-   alien_ls -F ${__alien_trainDirectory} | while read -r ; do
 
-      local finput="${__alien_trainDirectory}/${REPLY}/AnalysisResults.root"
-      ! alien_ls ${finput} &> /dev/null && continue
-      alien_cp alien:${__alien_trainDirectory}/${REPLY}/AnalysisResults.root file:AnalysisResults_${output_suffix}_tmp${REPLY}.root
-      mergingCmd="${mergingCmd} AnalysisResults_${output_suffix}_tmp${REPLY}.root"
+   for itmp in $(alien_ls -F ${__alien_trainDirectory}) ; do
+      local dirNumber=$(grep -o -E "[0-9]{3}" <<< ${itmp})
+      local inputFile="${__alien_trainDirectory}${dirNumber}/AnalysisResults.root"
+      local tmpLocalFile="AnalysisResults_${output_suffix}_tmp${dirNumber}.root"
 
+      ! alien_ls ${inputFile} &> /dev/null && continue
+
+      echo "      --> Get temporary partial output ${dirNumber}"
+      alien_cp alien:${inputFile} file:${tmpLocalFile}
+
+      mergingCmd="${mergingCmd} ${tmpLocalFile}"
    done
 
+
+   echo "      --> Merge partial outputs locally using alihadd"
    eval ${mergingCmd[@]}
+
    if [[ -e AnalysisResults_${output_suffix}.root ]]
    then
+      echo "      --> Local merging successful! Delete temporary partial outputs."
       rm -f AnalysisResults_${output_suffix}_tmp*
       return 0
    else
+      echo "      --> Local merging failed! Keep temporary partial outputs."
       return 0
    fi
 

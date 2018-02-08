@@ -2,11 +2,12 @@
 ###
 ### Objective:
 ### The macro is aimed to help analysers to get their LEGO train outputs. Two cases are addressed:
-###   1. "Train merging successful", outputs can be collectly directly
+###   1. "Train merging successful", outputs can be collected directly
+###      -> IMPLEMENTED
 ###   2. "Train merging failed", outputs have to be merged locally:
-###     a. merging is performed at "Stage_*" level
-###     b. merging is performed at "processing" level
-###     c. merging is performed on a per-run basis
+###     a. merging is performed at "Stage_*" level    -> IMPLEMENTED
+###     b. merging is performed at "processing" level -> NOT YET IMPLEMENTED
+###     c. merging is performed on a per-run basis    -> NOT YET IMPLEMENTED
 ###
 ### Constraints:
 ###   - Bash scripting written in a portable way (if possible)
@@ -20,7 +21,7 @@
 ###    Julien Hamon (IPHC, Strasbourg)
 ###
 
-develop=true
+develop=false
 ###
 ### Example of train with 2 runlists:
 ###   - Runlit 1: failed during merging
@@ -34,13 +35,13 @@ develop=true
 
 set -o errexit
 set -o nounset
-cleanup() {
-   printf "==================================================\n"
-   echo "Clean up temporary files..."
-   echo "... Done!"
-   printf "==================================================\n"
-}
-trap cleanup EXIT
+# cleanup() {
+#    printf "==================================================\n"
+#    echo "Clean up temporary files..."
+#    echo "... Done!"
+#    printf "==================================================\n"
+# }
+# trap cleanup EXIT
 
 
 
@@ -59,12 +60,28 @@ __base="$(basename ${__file} .sh)"
 ### ====================================================================================================
 ### Function:  Documentation of the script
 ###            How to use it
+###
 show_usage()
 {
+   # Script short description
+   printf "\n================   Description    ================\n"
+   printf "The macro is aimed to help analysers to get their LEGO train outputs.\n"
+   printf "Two cases are addressed:\n"
+   printf "   1. 'Train merging successful', outputs can be collected directly\n"
+   printf "      -> IMPLEMENTED\n"
+   printf "   2. 'Train merging failed', outputs have to be merged locally:\n"
+   printf "     a. merging is performed at 'Stage_*' level    -> IMPLEMENTED\n"
+   printf "     b. merging is performed at 'processing' level -> NOT YET IMPLEMENTED\n"
+   printf "     c. merging is performed on a per-run basis    -> NOT YET IMPLEMENTED\n"
+   printf "==================================================\n"
+
+   # Script usage
    printf "\n================   Script usage   ================\n"
    printf "./${__base}.sh --train [name] --number [nb]\n"
-   printf "   --train:  D2H_pp\n"
-   printf "   --number: 2589\n"
+   printf "   --train:  train name of the form PAG_system\n"
+   printf "   --number: train number\n"
+   printf "\nExample:\n"
+   printf "./${__base}.sh --train D2H_pp_MC --number 840\n"
    printf "==================================================\n"
    printf "\n"
    exit 1
@@ -76,10 +93,20 @@ show_usage()
 
 
 ### ====================================================================================================
-### Function:  check pre-requists
-###            Script arguments, AliRoot, AliEn
+### Function:  Check pre-requists: script arguments, AliRoot, AliEn
+###            Print documentation if needed.
+###
 check_prerequists()
 {
+   # First check if documentation needs to be printed
+   case ${1:-} in
+      --help | -h | -\?)
+         show_usage
+         ;;
+   esac
+
+
+   # Start the script checking pre-requist
    printf "\n"
    echo "--- Starting the script"
    echo "o-- Check pre-requists"
@@ -111,6 +138,7 @@ check_prerequists()
 ### ====================================================================================================
 ### Function:  format train name
 ###            PAG_System or PAG_System_MC
+###
 format_train_name()
 {
    __trainName="${1}"
@@ -196,6 +224,7 @@ format_train_name()
 ### ====================================================================================================
 ### Function:  manually parsing options in a flexible approach
 ###            Source: http://mywiki.wooledge.org/BashFAQ/035#Manual_loop
+###
 parse_arguments()
 {
    echo "oo- Parse script arguments"
@@ -207,11 +236,6 @@ parse_arguments()
       [[ -n ${1:-} ]] || break
 
       case ${1} in
-
-         # Documentation
-         --help | -h | -\?)
-            show_usage
-            ;;
 
          # Get the LEGO train name
          --train)
@@ -272,8 +296,11 @@ parse_arguments()
 
 
 ### ====================================================================================================
-### Function:  Collect train outputs within a directory
-###            If merging failed, then files in Stage_<max>/0*/ are merged
+### Function:  Collect train outputs within the provided directory
+###            1. "Train merging successful" -> IMPLEMENTED
+###            2. "Train merging failed"
+###              a. merging performed at "Stage_*" level -> IMPLEMENTED
+###
 collect_outputs_inDirectory()
 {
    # Check if a train directory is provided
@@ -299,7 +326,7 @@ collect_outputs_inDirectory()
    if alien_ls ${__alien_trainDirectory}/AnalysisResults.root &> /dev/null
    then
       alien_cp alien:${__alien_trainDirectory}/AnalysisResults.root file:AnalysisResults_${output_suffix}.root
-      return 1
+      return 0
    fi
 
 
@@ -323,7 +350,7 @@ collect_outputs_inDirectory()
    if [[ -e AnalysisResults_${output_suffix}.root ]]
    then
       rm -f AnalysisResults_${output_suffix}_tmp*
-      return 1
+      return 0
    else
       return 0
    fi
@@ -338,8 +365,8 @@ collect_outputs_inDirectory()
 
 
 ### ====================================================================================================
-### Function:  Collect train outputs - main method
-###            1. Assuming the train manages to reach the "merging" stage: a. normal train, b. meta train.
+### Function:  Collect train outputs - Main method
+###            Find the train directories on AliEn (META or Standard trains)
 ###
 collect_outputs_main()
 {
@@ -421,11 +448,7 @@ collect_outputs_main()
 
 
    done
-
 }
-
-
-
 
 
 
@@ -434,7 +457,10 @@ collect_outputs_main()
 
 ### ====================================================================================================
 ### Main:  default use of the script
-###        Check, parse
+###        Check pre-requists, parse arguments, collect outputs.
+###
 check_prerequists "$@"
 parse_arguments "$@"
 collect_outputs_main
+
+exit 0

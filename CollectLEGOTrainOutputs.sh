@@ -448,6 +448,10 @@ collect_outputs_main()
 
 
    done
+
+
+   # Say goodbye
+   echo "ooo Files have been collected successfully. Exit..."
 }
 
 

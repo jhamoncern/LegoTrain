@@ -10,9 +10,13 @@ Downloading train outputs of several child sets and/or several runlists by hand,
 The script addresses automatically the two following cases:
 
 1. *Train merging successful*: train outputs (one per child and runlist) can be collected directly.
+
 2. *Train merging failed*: outputs have to be merged locally
+
 2.1. Local merging performed at "Stage_*" level
+
 2.2. Local merging performed at "processing" level **&rarr; not yet implemented**
+
 2.3. Local merging performed on a per-run basis **&rarr; not yet implemented**
 
 

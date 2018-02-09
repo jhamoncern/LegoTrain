@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
 ###
 ### Objective:
-### The macro is aimed to help analysers to get their LEGO train outputs. Two cases are addressed:
+### The script is aimed to help ALICE analysers to get their LEGO train outputs.
+### Downloading train outputs of several child sets and/or several runlists by hand,
+### with potentially local merging to be performed when train failed at merging stage,
+### can be tough.
+### This tool is aimed to make your life easier, taking care of getting your train outputs.
+###
+### The script addresses automatically the two following cases:
 ###   1. "Train merging successful", outputs can be collected directly
 ###      -> IMPLEMENTED
 ###   2. "Train merging failed", outputs have to be merged locally:
-###     a. merging is performed at "Stage_*" level    -> IMPLEMENTED
-###     b. merging is performed at "processing" level -> NOT YET IMPLEMENTED
-###     c. merging is performed on a per-run basis    -> NOT YET IMPLEMENTED
+###     a. local merging performed at "Stage_*" level    -> IMPLEMENTED
+###     b. local merging performed at "processing" level -> NOT YET IMPLEMENTED
+###     c. local merging performed on a per-run basis    -> NOT YET IMPLEMENTED
 ###
 ### Constraints:
 ###   - Bash scripting written in a portable way (if possible)
@@ -65,14 +71,18 @@ show_usage()
 {
    # Script short description
    printf "\n================   Description    ================\n"
-   printf "The macro is aimed to help analysers to get their LEGO train outputs.\n"
-   printf "Two cases are addressed:\n"
+   printf "The script is aimed to help ALICE analysers to get their LEGO train outputs.\n"
+   printf "Downloading train outputs of several child sets and/or several runlists by hand,\n"
+   printf "with potentially local merging to be performed when train failed at merging stage,\n"
+   printf "can be tough.\n"
+   printf "This tool is aimed to make your life easier, taking care of getting your train outputs.\n"
+   printf "\nThe script addresses automatically the two following cases:\n"
    printf "   1. 'Train merging successful', outputs can be collected directly\n"
    printf "      -> IMPLEMENTED\n"
    printf "   2. 'Train merging failed', outputs have to be merged locally:\n"
-   printf "     a. merging is performed at 'Stage_*' level    -> IMPLEMENTED\n"
-   printf "     b. merging is performed at 'processing' level -> NOT YET IMPLEMENTED\n"
-   printf "     c. merging is performed on a per-run basis    -> NOT YET IMPLEMENTED\n"
+   printf "     a. local merging performed at 'Stage_*' level    -> IMPLEMENTED\n"
+   printf "     b. local merging performed at 'processing' level -> NOT YET IMPLEMENTED\n"
+   printf "     c. local merging performed on a per-run basis    -> NOT YET IMPLEMENTED\n"
    printf "==================================================\n"
 
    # Script usage
@@ -80,6 +90,7 @@ show_usage()
    printf "./${__base}.sh --train [name] --number [nb]\n"
    printf "   --train:  train name of the form PAG_system\n"
    printf "   --number: train number\n"
+   printf "   --help:   script documentation\n"
    printf "\nExample:\n"
    printf "./${__base}.sh --train D2H_pp_MC --number 840\n"
    printf "==================================================\n"

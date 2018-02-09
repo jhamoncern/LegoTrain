@@ -25,6 +25,7 @@ $ ./CollectLEGOTrainOutputs.sh --train [name] --number [nb]
 ```
 - ```--train```:  train name, in the form of *PAG_system*
 - ```--number```:  train number
+- ```--help```:  script documentation
 
 Example:
 ```sh

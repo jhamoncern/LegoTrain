@@ -13,11 +13,9 @@ The script addresses automatically the two following cases:
 
 2. *Train merging failed*: outputs have to be merged locally
 
-2.1. Local merging performed at "Stage_*" level
-
-2.2. Local merging performed at "processing" level **&rarr; not yet implemented**
-
-2.3. Local merging performed on a per-run basis **&rarr; not yet implemented**
+* Local merging performed at "Stage_*" level
+* Local merging performed at "processing" level **&rarr; not yet implemented**
+* Local merging performed on a per-run basis **&rarr; not yet implemented**
 
 
 ## Script usage:
